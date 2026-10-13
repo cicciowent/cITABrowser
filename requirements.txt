@@ -1,0 +1,44 @@
+# cITA Browser 7.0 — Suite Fiscale, PDF Studio & Firma Digitale
+# SPDX-License-Identifier: GPL-3.0-or-later — Copyright (C) 2026 Francesco Ventura
+# Licenza GPLv3 — Gratuita per uso anche commerciale (vedi LICENSE)
+# Versioni pinnate e verificate insieme (Windows 10/11 64-bit, Python 3.11).
+# Installazione: installa.bat (Windows, zero-click) o installa.sh (Linux).
+
+# GUI & Web Engine Chromium
+PySide6==6.11.2
+
+# Suite PDF Studio (Merge, Split, Rotate, Compress, PDF/A, Word, Excel)
+pypdf==6.17.0
+pikepdf==10.12.0
+Pillow==12.3.0
+pdf2docx==0.5.13
+pdfplumber==0.11.10
+PyMuPDF==1.28.2
+python-docx==1.2.0
+# NOTA: PyMuPDF e python-docx sono usati direttamente (anteprime/export)
+# e anche come dipendenze transitive di pdf2docx — il pin garantisce determinismo.
+lxml==6.1.3
+# NOTA: lxml e richiesto da pdf2docx — pinnato esplicito per build riproducibili.
+
+# Firma Digitale Qualificata (CAdES .p7m, PAdES .pdf, Smart Card / USB PKCS#11)
+PyKCS11==1.5.19
+asn1crypto==1.5.1
+cryptography==50.0.1
+pyHanko[pkcs11]==0.37.0
+
+# Keyring OS Sicuro (Gestione credenziali e PIN — mai in chiaro su disco)
+# Su Linux richiede un backend Secret Service (es. gnome-keyring / kwallet).
+keyring==25.7.0
+
+# Funzionalita reportistica, timbro e QR code
+reportlab==5.0.1
+openpyxl==3.1.5
+qrcode==8.2
+
+# HTTP generico (usato da dipendenze transitive: pdf2docx, pyHanko, keyring backend)
+requests==2.34.2
+
+# --- Requisiti di sistema NON pip (opzionali, da installare a parte) ---
+# OCR: ocrmypdf + tesseract (sistema). PDF/A certificato: veraPDF o Ghostscript.
+# Token USB / Smart Card: driver PKCS#11 del fornitore (Aruba, Bit4id, InfoCert, Namirial, Poste, CIE).
+# Linux per pikepdf: libqpdf. Linux per PyKCS11: pcscd / libpcsclite.

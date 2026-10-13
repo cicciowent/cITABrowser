@@ -1,0 +1,10 @@
+# cITA Browser 7.0 — normalizzazione fine-riga per upload GitHub
+# Gli script Linux devono restare LF anche se clonati su Windows (autocrlf).
+*.sh text eol=lf
+*.bat text eol=crlf
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.spec text eol=lf
+*.ico binary
+*.png binary

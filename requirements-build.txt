@@ -1,0 +1,5 @@
+# Dipendenze SOLO per la build standalone (non servono per l'uso da sorgente).
+# Eseguire: .venv\Scripts\python.exe -m pip install -r requirements-build.txt
+# e poi: build.bat
+pyinstaller==6.22.2
+pyinstaller-hooks-contrib==2026.7

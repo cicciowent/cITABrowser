@@ -1,0 +1,42 @@
+# cITA Browser 7.0 — GitHub MVP
+# Ambiente isolato (ricreabile con installa.bat / installa.sh)
+.venv/
+venv/
+
+# Bytecode Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build PyInstaller
+dist/
+build/
+*.spec.bak
+*.exe
+
+# Dati utente locali (mai nel repo)
+*.db
+*.sqlite
+*.sqlite-*
+profiles.json
+preferiti.json
+config.json
+note_salvate/
+agenda_tasks.json
+backup_aggiornamenti/
+
+# Segreti / traffico reale (mai nel repo)
+.env
+*.har
+*.apk
+*.p7m
+da_scaricare.json
+registro_*.json
+richieste_massive.json
+esiti.json
+
+# Documenti reali di test (solo template vuoti)
+*.xml
+*.pdf
+*.zip
+!assets/**/*.pdf
