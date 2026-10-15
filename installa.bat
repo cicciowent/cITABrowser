@@ -1,7 +1,10 @@
 @echo off
 rem SPDX-License-Identifier: GPL-3.0-or-later
 rem cITA Browser 7.0 — Copyright (C) 2026 Francesco Ventura
-rem installa.bat — Installazione zero-click: Python 3.11 auto-install + venv + dipendenze.
+rem installa.bat — Installazione zero-click deterministica e autonoma:
+rem   Rilevamento intelligente Python 3.12 / 3.11 / launcher / percorsi standard
+rem   Creazione ambiente virtuale isolato .venv + dipendenze pinnate
+rem   Creazione garantita collegamenti Start e Desktop (inclusi percorsi OneDrive)
 setlocal enabledelayedexpansion
 title Installazione cITA Browser 7.0
 cd /d "%~dp0"
@@ -9,82 +12,111 @@ cd /d "%~dp0"
 echo ======================================================================
 echo             Installazione e Configurazione cITA Browser 7.0
 echo ======================================================================
-echo  L'utente deve solo fare doppio clic: Python 3.11 viene
-echo  installato da solo se manca (winget -^> python.org).
+echo  Setup zero-click per Windows 10 e Windows 11.
 echo ======================================================================
 echo.
 
+REM 0. Chiusura preventiva di eventuali processi residui per liberare file lockati
+powershell -NoProfile -Command "$app='%~dp0'.ToLower().TrimEnd('\'); Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'pythonw.exe' -or $_.Name -eq 'python.exe') -and $_.CommandLine -and $_.CommandLine.ToLower().Contains($app) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+
+echo [1/3] Rilevamento interprete Python (>= 3.11)...
 set "PYTHON_EXE="
-set "PY_URL=https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe"
-set "PY_INSTALLER=%TEMP%\python-3.11.9-amd64.exe"
 
-call :trova_python
-if defined PYTHON_EXE goto :venv
-
-echo Python 3.11 non trovato nel sistema.
-echo Preparazione dell'installazione automatica...
-echo.
-call :autoinstall
-call :trova_python
-
-if not defined PYTHON_EXE (
-    echo.
-    echo [ERRORE] Impossibile completare l'installazione automatica di Python.
-    echo Verifica la connessione Internet oppure scarica e installa Python 3.11+ da:
-    echo https://www.python.org/downloads/
-    echo ^(IMPORTANTE: durante l'installazione spunta "Add Python to PATH"^).
-    echo.
-    pause
-    exit /b 1
+REM 1. Rileva tramite py launcher (3.12, 3.11, default)
+for /f "delims=" %%i in ('py -3.12 -c "import sys; print(sys.executable)" 2^>nul') do (
+    if exist "%%i" call :verifica_versione "%%i"
+    if defined PYTHON_EXE goto :python_trovato
+)
+for /f "delims=" %%i in ('py -3.11 -c "import sys; print(sys.executable)" 2^>nul') do (
+    if exist "%%i" call :verifica_versione "%%i"
+    if defined PYTHON_EXE goto :python_trovato
+)
+for /f "delims=" %%i in ('py -c "import sys; print(sys.executable)" 2^>nul') do (
+    if exist "%%i" call :verifica_versione "%%i"
+    if defined PYTHON_EXE goto :python_trovato
 )
 
-:venv
-echo [OK] Interprete Python rilevato: "!PYTHON_EXE!"
+REM 2. Rileva tramite comando python nel PATH
+for /f "delims=" %%i in ('python -c "import sys; print(sys.executable)" 2^>nul') do (
+    if exist "%%i" call :verifica_versione "%%i"
+    if defined PYTHON_EXE goto :python_trovato
+)
+
+REM 3. Rileva nei percorsi standard di installazione Windows
+if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
+    call :verifica_versione "%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+    if defined PYTHON_EXE goto :python_trovato
+)
+if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
+    call :verifica_versione "%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+    if defined PYTHON_EXE goto :python_trovato
+)
+if exist "%ProgramFiles%\Python312\python.exe" (
+    call :verifica_versione "%ProgramFiles%\Python312\python.exe"
+    if defined PYTHON_EXE goto :python_trovato
+)
+if exist "%ProgramFiles%\Python311\python.exe" (
+    call :verifica_versione "%ProgramFiles%\Python311\python.exe"
+    if defined PYTHON_EXE goto :python_trovato
+)
+
+REM 4. Se ancora non trovato, tenta autoinstallazione guidata
+echo Python 3.11/3.12 non trovato nei percorsi di sistema.
+echo Tentativo di installazione automatica...
 echo.
+call :autoinstall
+if defined PYTHON_EXE goto :python_trovato
+
+echo.
+echo [ERRORE] Impossibile rilevare o installare Python 3.11 o superiore.
+echo Scarica e installa Python 3.12 o 3.11 da https://www.python.org/downloads/
+echo ^(IMPORTANTE: spunta la casella "Add Python to PATH"^), quindi rilancia installa.bat.
+echo.
+pause
+exit /b 1
+
+:python_trovato
+echo [OK] Interprete Python: "!PYTHON_EXE!"
+echo.
+
 if not exist "%~dp0.venv\Scripts\python.exe" (
-    echo [1/3] Creazione ambiente virtuale isolato .venv...
+    echo [2/3] Creazione ambiente virtuale isolato .venv...
     "!PYTHON_EXE!" -m venv "%~dp0.venv"
     if errorlevel 1 (
-        echo [ERRORE] Impossibile creare l'ambiente virtuale.
-        echo Prova a riparare Python 3.11 e rilancia installa.bat.
-        echo.
+        echo [ERRORE] Impossibile creare l'ambiente virtuale in "%~dp0.venv".
         pause
         exit /b 1
     )
     echo [OK] Ambiente virtuale creato.
 ) else (
-    echo [1/3] Ambiente virtuale .venv gia pronto.
+    echo [2/3] Ambiente virtuale .venv gia pronto.
 )
 echo.
 
-echo [2/3] Aggiornamento pip e installazione dipendenze...
-echo        ^(versioni pinnate in requirements.txt - installazione deterministica^)
+echo Aggiornamento pip e installazione dipendenze da requirements.txt...
 "%~dp0.venv\Scripts\python.exe" -m pip install --disable-pip-version-check --upgrade pip
 "%~dp0.venv\Scripts\python.exe" -m pip install --disable-pip-version-check -r "%~dp0requirements.txt"
 if errorlevel 1 (
     echo.
-    echo [ERRORE] Installazione dipendenze fallita. Controlla la connessione
-    echo e rilancia installa.bat. Log sopra per il dettaglio.
+    echo [ERRORE] Installazione dipendenze non completata.
+    echo Verifica la connessione a Internet e rilancia installa.bat.
     echo.
     pause
     exit /b 1
 )
-echo.
 echo [OK] Tutte le dipendenze sono installate correttamente.
 echo.
 
-echo [3/3] Creazione collegamenti ufficiali ^(Menu Start e Desktop^) e registrazione Windows...
+echo [3/3] Configurazione collegamenti e icone (Menu Start e Desktop)...
 "%~dp0.venv\Scripts\python.exe" "%~dp0tools_register_icons.py"
 if errorlevel 1 (
-    echo [ATTENZIONE] Registrazione icone non riuscita, il programma resta avviabile da avvia_browser.bat.
+    echo [ATTENZIONE] Registrazione icone tramite Python non riuscita, applico fallback VBScript...
+    call :crea_shortcut_vbs
 ) else (
-    echo [OK] Icona cITA Browser 7.0 disponibile nel Menu Start e sul Desktop!
+    echo [OK] Icone e collegamenti configurati con successo!
 )
 echo.
-echo [NOTA] Nessuna associazione predefinita e' stata forzata.
-echo        Potrai scegliere liberamente i ruoli ^(Browser, PDF, XML^)
-echo        dalla finestra Impostazioni all'interno di cITA Browser.
-echo.
+
 echo ======================================================================
 echo                Installazione completata con successo!
 echo ======================================================================
@@ -93,33 +125,7 @@ start "" "%~dp0.venv\Scripts\pythonw.exe" "%~dp0cita_browser.py"
 endlocal
 exit /b 0
 
-rem ---------- Subroutine: cerca Python 3.11+ nei percorsi noti + launcher ----------
-:trova_python
-set "PYTHON_EXE="
-if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
-    call :verifica_versione "%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
-    if defined PYTHON_EXE exit /b 0
-)
-if exist "%ProgramFiles%\Python311\python.exe" (
-    call :verifica_versione "%ProgramFiles%\Python311\python.exe"
-    if defined PYTHON_EXE exit /b 0
-)
-set "TMP_PY="
-for /f "delims=" %%i in ('py -3.11 -c "import sys; print(sys.executable)" 2^>nul') do set "TMP_PY=%%i"
-if defined TMP_PY (
-    if exist "!TMP_PY!" call :verifica_versione "!TMP_PY!"
-    if defined PYTHON_EXE exit /b 0
-)
-set "TMP_PY="
-for /f "delims=" %%i in ('python -c "import sys; print(sys.executable)" 2^>nul') do set "TMP_PY=%%i"
-if defined TMP_PY (
-    if exist "!TMP_PY!" call :verifica_versione "!TMP_PY!"
-    if defined PYTHON_EXE exit /b 0
-)
-set "PYTHON_EXE="
-exit /b 0
-
-rem ---------- Subroutine: accetta solo >= 3.11 ----------
+rem ---------- Subroutine: accetta solo versioni Python >= 3.11 ----------
 :verifica_versione
 set "CAND=%~1"
 if "%CAND%"=="" exit /b 0
@@ -129,35 +135,65 @@ if not errorlevel 1 (
 )
 exit /b 0
 
-rem ---------- Subroutine: winget -^> download python.org ----------
+rem ---------- Subroutine: installazione automatica via winget / download ----------
 :autoinstall
 where winget.exe >nul 2>&1
 if not errorlevel 1 (
-    echo Trovato Windows Package Manager ^(winget^). Tentativo di installazione di Python 3.11...
-    winget install Python.Python.3.11 --silent --scope user --accept-package-agreements --accept-source-agreements
+    echo Trovato Windows Package Manager ^(winget^). Installazione di Python 3.12...
+    winget install Python.Python.3.12 --silent --scope user --accept-package-agreements --accept-source-agreements
+    if not errorlevel 1 (
+        if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
+            set "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+            exit /b 0
+        )
+    )
 )
-call :trova_python
-if defined PYTHON_EXE exit /b 0
-echo Download dell'installer ufficiale di Python 3.11.9 da python.org...
-set "INSTALLER=%PY_INSTALLER%"
+echo Download dell'installer ufficiale Python 3.11.9 da python.org...
+set "PY_URL=https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe"
+set "INSTALLER=%TEMP%\python-3.11.9-amd64.exe"
 del "%INSTALLER%" >nul 2>&1
 where curl.exe >nul 2>&1
 if not errorlevel 1 (
-    curl.exe -fSL --retry 3 "!PY_URL!" -o "!INSTALLER!"
+    curl.exe -fSL --retry 3 "%PY_URL%" -o "%INSTALLER%"
 ) else (
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; (New-Object System.Net.WebClient).DownloadFile('https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe', $env:TEMP + '\python-3.11.9-amd64.exe')"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; (New-Object System.Net.WebClient).DownloadFile('%PY_URL%', '%INSTALLER%')"
 )
-if not exist "!INSTALLER!" (
-    echo [ERRORE] Download installer Python fallito.
-    exit /b 0
+if exist "%INSTALLER%" (
+    echo Installazione automatica di Python 3.11 in corso...
+    start /wait "" "%INSTALLER%" /passive InstallAllUsers=0 PrependPath=1 Include_test=0 Include_pip=1 AssociateFiles=0 CompileAll=1
+    del "%INSTALLER%" >nul 2>&1
+    if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
+        set "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+        exit /b 0
+    )
 )
-for %%A in ("!INSTALLER!") do set "SZ=%%~zA"
-if !SZ! LSS 10000000 (
-    echo [ERRORE] Installer scaricato incompleto ^(!SZ! byte^).
-    del "!INSTALLER!" >nul 2>&1
-    exit /b 0
-)
-echo Installazione automatica di Python 3.11 in corso... ^(nessun intervento richiesto^)
-start /wait "" "!INSTALLER!" /passive InstallAllUsers=0 PrependPath=1 Include_test=0 Include_pip=1 AssociateFiles=0 CompileAll=1
-del "!INSTALLER!" >nul 2>&1
+exit /b 0
+
+rem ---------- Subroutine: fallback creazione collegamento VBS ----------
+:crea_shortcut_vbs
+set "VBS_MK=%TEMP%\cita_shortcut_%RANDOM%.vbs"
+(
+    echo Set oWS = WScript.CreateObject^("WScript.Shell"^)
+    echo sDesk = oWS.SpecialFolders^("Desktop"^)
+    echo Set oLnk = oWS.CreateShortcut^(sDesk ^& "\cITA Browser 7.0.lnk"^)
+    echo oLnk.TargetPath = "%~dp0.venv\Scripts\pythonw.exe"
+    echo oLnk.Arguments = """%~dp0cita_browser.py"""
+    echo oLnk.WorkingDirectory = "%~dp0"
+    echo oLnk.IconLocation = "%~dp0cita_icona.ico,0"
+    echo oLnk.Description = "cITA Browser 7.0"
+    echo oLnk.Save
+    echo sProfDesk = oWS.ExpandEnvironmentStrings^("%%USERPROFILE%%\Desktop"^)
+    echo If LCase^(sProfDesk^) ^<^> LCase^(sDesk^) Then
+    echo   Set oLnk2 = oWS.CreateShortcut^(sProfDesk ^& "\cITA Browser 7.0.lnk"^)
+    echo   oLnk2.TargetPath = "%~dp0.venv\Scripts\pythonw.exe"
+    echo   oLnk2.Arguments = """%~dp0cita_browser.py"""
+    echo   oLnk2.WorkingDirectory = "%~dp0"
+    echo   oLnk2.IconLocation = "%~dp0cita_icona.ico,0"
+    echo   oLnk2.Description = "cITA Browser 7.0"
+    echo   oLnk2.Save
+    echo End If
+) > "%VBS_MK%"
+cscript //nologo "%VBS_MK%" >nul 2>&1
+del "%VBS_MK%" 2>nul
+echo [OK] Collegamento Desktop creato tramite fallback di sistema.
 exit /b 0

@@ -141,6 +141,7 @@ rem puo' sostituire se stesso senza interrompersi.
 (
     if exist "%SRC%\aggiorna.bat" copy /y "%SRC%\aggiorna.bat" "%~f0" >nul 2>&1
     rmdir /s /q "%TMPX%" >nul 2>&1
+    "%APP%.venv\Scripts\python.exe" "%APP%tools_register_icons.py" >nul 2>&1
     start "" "%APP%.venv\Scripts\pythonw.exe" "%APP%cita_browser.py"
     timeout /t 3 /nobreak >nul
     exit /b 0
